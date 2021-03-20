@@ -1,13 +1,16 @@
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
+import pandas as pd
 import csv
 import threading
+import matplotlib.pyplot as plt
 
 
 URL = 'https://auto.ru/moskva/cars/bmw/x5/10382710/all'
 HEADERS = { 'user_agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
             'accept' : '*/*' }
+FILENAME = "dataset/ad-info.csv"
 
 # создание get-запроса для получения веб-страницы
 def get_html(url, params):
@@ -36,12 +39,12 @@ def get_content_fom_ad(url): #need
     soup = BeautifulSoup(ad_info.text, 'html.parser')
 
     title = soup.find("div", {"class": "CardHead-module__title"})
-    if title == None:
+    if title is None:
         return
     title = title.text
 
     views = soup.find("div", {"class": "CardHead-module__info-item CardHead-module__views"})
-    views = views.text
+    views = get_number_of_views_per_day(views.text)
 
     price = soup.find("span", {"class": "OfferPriceCaption__price"})
     price = get_price(price.text)
@@ -51,8 +54,6 @@ def get_content_fom_ad(url): #need
 
     mileage = soup.find("li", {"class": "CardInfoRow CardInfoRow_kmAge"})
     mileage = get_mileage(mileage.text)
-
-    FILENAME = "dataset/ad-info.csv"
 
     # запись данных в CSV-файл
     with open(FILENAME, "a", encoding='utf-8', newline='') as file:
@@ -79,8 +80,6 @@ def get_content_and_links_to_other_pages(html):
         pages.append(
             item.get('href')
         )
-
-    FILENAME = "dataset/ad-info.csv"
 
     # запись названий столбцов в CSV-файл
     with open(FILENAME, "a", encoding='utf-8', newline='') as file:
@@ -121,8 +120,58 @@ def parse():
         print('server is not available')
 
 
+# функция построение графиков
+def draw_addiction(data_form_csv_file_sort):
+    # n - выборка анализируемых авто
+    n = 20
+    fig, ax = plt.subplots()
+    axes = [ax, ax.twinx()]
+
+    # Освобождаем место с правой стороны для дополнительной оси Y и снизу для X.
+    fig.subplots_adjust(right=0.8)
+    fig.subplots_adjust(bottom=0.25)
+
+    # Перемещаем последний стержень оси Y вправо
+    axes[-1].spines['right'].set_position(('axes', 1))
+
+    # Чтобы сделать видимой границу самой правой оси, нам нужно включить рамку.
+    # Однако это скрывает другие графики, поэтому нам нужно отключить его заполнение.
+    axes[-1].set_frame_on(True)
+    axes[-1].patch.set_visible(False)
+    colors = ('Orange', 'Blue')
+
+    # выбираем даннные и отсортированного CSV-файла
+    data1 = data_form_csv_file_sort['price'][:n]
+    data2 = data_form_csv_file_sort['views'][:n]
+
+    #price
+    axes[0].bar(list(range(0, n)), data1.to_numpy(), color=colors[1])
+    axes[0].set_ylabel('Car price, m', color=colors[1])
+    axes[0].tick_params(axis='y', colors=colors[1])
+    axes[0].set_xticks(list(range(0, n)))
+    my_xticks = data_form_csv_file_sort['title'][:n]
+    axes[0].set_xticklabels(my_xticks.to_numpy(), rotation=60);
+
+    # views
+    axes[1].plot(data2.to_numpy(), marker='o', linestyle='solid', color=colors[0])
+    axes[1].set_ylabel('Number of views', color=colors[0])
+    axes[1].tick_params(axis='y', colors=colors[0])
+
+    axes[0].set_xlabel('Car name')
+    fig.set_size_inches(15, 7)
+    plt.show()
+
+# функция визуализации данных
+def visualization():
+    filename_for_sorted_data = "dataset/ad-info-sorted.csv"
+    data_form_csv_file = pd.read_csv(FILENAME, delimiter=',')
+    data_form_csv_file_sort = data_form_csv_file.sort_values('views', ascending=False)
+    data_form_csv_file_sort.to_csv(filename_for_sorted_data, header=False)
+    draw_addiction(data_form_csv_file_sort)
+
 if __name__ == "__main__":
     parse()
+    visualization()
 
 
 
